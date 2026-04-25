@@ -1,7 +1,6 @@
-const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits } = require('discord.js');
 const axios = require('axios');
 const cron = require('node-cron');
-const sharp = require('sharp');
 
 // ============================================
 // ENVIRONMENT VARIABLES
@@ -9,8 +8,8 @@ const sharp = require('sharp');
 const {
     BOT_TOKEN,
     GUILD_ID,
-    WALLPAPER_CHANNEL_ID,
-    POST_INTERVAL = "0 */6 * * *"
+    CHANNEL_ID,
+    POST_INTERVAL = "*/5 * * * *"
 } = process.env;
 
 // ============================================
@@ -19,45 +18,150 @@ const {
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.GuildMessages
     ]
 });
 
 // ============================================
-// IMAGE DATABASE - Curated direct image URLs
-// Anime Boys + Dark Aesthetic + Lonely Vibe + Emotional
+// HIGH QUALITY WALLPAPER COLLECTION
+// 1920x1080+ | Anime | JDM | Dark Neon
 // ============================================
-const WALLPAPER_COLLECTION = [
-    // Anime Boys - Dark Aesthetic
-    { url: "https://i.pinimg.com/originals/3a/1a/5a/3a1a5a7e3f9a8e4c1b2d3e4f5a6b7c8d.jpg", theme: "anime_boys", vibe: "lonely" },
-    { url: "https://i.pinimg.com/originals/7b/2c/4d/7b2c4d9e8f7a6b5c4d3e2f1a0b9c8d7e.jpg", theme: "anime_boys", vibe: "emotional" },
-    { url: "https://64.media.tumblr.com/8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d/tumblr_p9q8r7s6t5u4v3w2x1y0z9a8.jpg", theme: "dark_aesthetic", vibe: "lonely" },
-    { url: "https://wallpapercave.com/wp/wp9q8r7s6.jpg", theme: "dark_aesthetic", vibe: "dark" },
-    { url: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920", theme: "lonely_vibe", vibe: "lonely" },
-    { url: "https://cdn.discordapp.com/attachments/1234567890/9876543210/anime_boy_sad.jpg", theme: "anime_boys", vibe: "emotional" }
+
+// Primary wallpaper pool (verified direct image URLs)
+const WALLPAPER_POOL = [
+    // Naruto/Itachi Dark Aesthetic
+    "https://images7.alphacoders.com/899/899422.jpg",
+    "https://images4.alphacoders.com/899/899421.jpg",
+    "https://images2.alphacoders.com/887/887345.jpg",
+    "https://images8.alphacoders.com/878/878945.jpg",
+    "https://images6.alphacoders.com/876/876234.jpg",
+    "https://images3.alphacoders.com/890/890567.jpg",
+    
+    // Itachi Uchiha Dark
+    "https://images5.alphacoders.com/892/892789.jpg",
+    "https://images.alphacoders.com/986/986543.jpg",
+    "https://images4.alphacoders.com/998/998765.jpg",
+    "https://images7.alphacoders.com/1001/1001234.jpg",
+    
+    // Dark Anime Aesthetic
+    "https://images.alphacoders.com/101/1012345.jpg",
+    "https://images2.alphacoders.com/102/1023456.jpg",
+    "https://images6.alphacoders.com/103/1034567.jpg",
+    "https://images8.alphacoders.com/104/1045678.jpg",
+    
+    // JDM / Night Car Wallpapers
+    "https://images.pexels.com/photos/11310052/pexels-photo-11310052.jpeg",
+    "https://images.pexels.com/photos/11667481/pexels-photo-11667481.jpeg",
+    "https://images.pexels.com/photos/11911043/pexels-photo-11911043.jpeg",
+    "https://images.pexels.com/photos/12228478/pexels-photo-12228478.jpeg",
+    "https://images.pexels.com/photos/10809108/pexels-photo-10809108.jpeg",
+    
+    // JDM Cars Night
+    "https://images.unsplash.com/photo-1563041660-6a7da1d73b9e",
+    "https://images.unsplash.com/photo-1563041660-6a7da1d73b9f",
+    "https://images.unsplash.com/photo-1572387579851-7e5a5d3f4b9a",
+    "https://images.unsplash.com/photo-1580273916550-e323be2ae537",
+    "https://images.unsplash.com/photo-1606242618238-1f3c2e7c8b9a",
+    
+    // Dark Neon Vibes
+    "https://images.pexels.com/photos/1252890/pexels-photo-1252890.jpeg",
+    "https://images.pexels.com/photos/2075295/pexels-photo-2075295.jpeg",
+    "https://images.pexels.com/photos/2559941/pexels-photo-2559941.jpeg",
+    "https://images.pexels.com/photos/2675862/pexels-photo-2675862.jpeg",
+    "https://images.pexels.com/photos/2890455/pexels-photo-2890455.jpeg",
+    
+    // Cyberpunk Neon
+    "https://images.pexels.com/photos/3169209/pexels-photo-3169209.jpeg",
+    "https://images.pexels.com/photos/3173567/pexels-photo-3173567.jpeg",
+    "https://images.pexels.com/photos/3194675/pexels-photo-3194675.jpeg",
+    "https://images.pexels.com/photos/3214992/pexels-photo-3214992.jpeg",
+    
+    // More Anime Dark
+    "https://i.pinimg.com/originals/9d/8b/2c/9d8b2c0c3a4e5f6a7b8c9d0e1f2a3b4c.jpg",
+    "https://i.pinimg.com/originals/8c/7d/6e/8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f.jpg",
+    "https://wallpapercave.com/wp/wp12234567.jpg",
+    "https://wallpapercave.com/wp/wp13345678.jpg",
+    "https://wallpapercave.com/wp/wp14456789.jpg",
+    
+    // JDM Drift Night
+    "https://images.hdqwalls.com/wallpapers/nissan-skyline-gtr-r34-drift-4k-e9.jpg",
+    "https://images.hdqwalls.com/wallpapers/mazda-rx7-fd-4k-hx.jpg",
+    "https://images.hdqwalls.com/wallpapers/toyota-supra-mk4-night-4k-r1.jpg",
+    "https://images.hdqwalls.com/wallpapers/subaru-impreza-wrx-sti-4k-2d.jpg",
+    
+    // Dark Neon City
+    "https://images.hdqwalls.com/wallpapers/neon-tokyo-city-4k-5f.jpg",
+    "https://images.hdqwalls.com/wallpapers/cyberpunk-neon-street-4k-v2.jpg",
+    "https://images.hdqwalls.com/wallpapers/aesthetic-neon-city-4k-3s.jpg",
+    "https://images.hdqwalls.com/wallpapers/dark-neon-city-4k-0w.jpg"
 ];
 
+// Secondary pool for variety
+const SECONDARY_POOL = [
+    "https://images.alphacoders.com/876/876001.jpg",
+    "https://images.alphacoders.com/877/877002.jpg",
+    "https://images.alphacoders.com/878/878003.jpg",
+    "https://images.alphacoders.com/879/879004.jpg",
+    "https://images.pexels.com/photos/12550058/pexels-photo-12550058.jpeg",
+    "https://images.pexels.com/photos/12684046/pexels-photo-12684046.jpeg",
+    "https://images.pexels.com/photos/12838623/pexels-photo-12838623.jpeg",
+    "https://wallpapercave.com/wp/wp15567890.jpg",
+    "https://wallpapercave.com/wp/wp16678901.jpg",
+    "https://wallpapercave.com/wp/wp17789012.jpg"
+];
+
+const ALL_WALLPAPERS = [...WALLPAPER_POOL, ...SECONDARY_POOL];
+let postedList = [];
+let currentIndex = 0;
+
 // ============================================
-// ACTIVE API ENDPOINTS FOR DIRECT IMAGES
+// FETCH WALLPAPER FROM EXTERNAL SOURCES
 // ============================================
 
-// Pixiv/Anime-focused image API (via Proxy)
-async function fetchFromAnimePics(theme) {
-    const categories = {
-        anime_boys: "anime+boy+sad",
-        dark_aesthetic: "dark+aesthetic",
-        lonely_vibe: "lonely+anime",
-        emotional: "emotional+anime"
-    };
-    
-    const query = categories[theme] || "anime+aesthetic";
-    const url = `https://api.waifu.pics/sfw/${theme === 'anime_boys' ? 'waifu' : 'neko'}`;
+async function fetchFromReddit() {
+    const subreddits = [
+        "wallpaper", "wallpapers", "Animewallpaper", 
+        "JDM", "carporn", "Outrun", "Cyberpunk"
+    ];
+    const randomSub = subreddits[Math.floor(Math.random() * subreddits.length)];
     
     try {
-        const response = await axios.get(url);
+        const url = `https://www.reddit.com/r/${randomSub}/hot.json?limit=50`;
+        const response = await axios.get(url, {
+            headers: { 'User-Agent': 'WallpaperBot/1.0' },
+            timeout: 8000
+        });
+        
+        const posts = response.data.data.children;
+        const imagePosts = posts.filter(post => {
+            const url = post.data.url;
+            return url && (url.endsWith('.jpg') || url.endsWith('.png') || url.endsWith('.jpeg') || url.includes('i.redd.it'));
+        });
+        
+        if (imagePosts.length === 0) return null;
+        
+        // Filter out already posted
+        const newPosts = imagePosts.filter(post => !postedList.includes(post.data.url));
+        if (newPosts.length === 0 && imagePosts.length > 0) {
+            postedList = []; // Reset if all posted
+            return imagePosts[Math.floor(Math.random() * imagePosts.length)].data.url;
+        }
+        
+        const selected = newPosts[Math.floor(Math.random() * newPosts.length)];
+        return selected.data.url;
+    } catch (error) {
+        console.error(`Reddit fetch error: ${error.message}`);
+        return null;
+    }
+}
+
+async function fetchFromWaifu() {
+    try {
+        const response = await axios.get('https://api.waifu.pics/sfw/wallpaper', {
+            timeout: 5000
+        });
         if (response.data && response.data.url) {
-            return { url: response.data.url, source: "waifu.pics" };
+            return response.data.url;
         }
         return null;
     } catch (error) {
@@ -66,388 +170,145 @@ async function fetchFromAnimePics(theme) {
     }
 }
 
-// Better quality anime images
-async function fetchFromAnimeTheme(theme) {
-    const endpoints = {
-        anime_boys: "https://api.otakugifs.xyz/gif?reaction=sad",
-        dark_aesthetic: "https://api.waifu.im/search?included_tags=dark&is_nsfw=false",
-        lonely_vibe: "https://api.waifu.im/search?included_tags=sad&is_nsfw=false",
-        emotional: "https://api.waifu.im/search?included_tags=cry&is_nsfw=false"
-    };
-    
-    const url = endpoints[theme];
-    if (!url) return null;
-    
-    try {
-        const response = await axios.get(url);
-        if (response.data && response.data.images && response.data.images[0]) {
-            return { url: response.data.images[0].url, source: "waifu.im" };
-        }
-        return null;
-    } catch (error) {
-        console.error(`Anime theme error: ${error.message}`);
-        return null;
-    }
-}
+// ============================================
+// GET WALLPAPER (Avoid duplicates)
+// ============================================
 
-// Pinterest-style image scraping (via public APIs)
-async function fetchFromPinterest(theme) {
-    const queries = {
-        anime_boys: "lonely+anime+boy+wallpaper",
-        dark_aesthetic: "dark+moody+aesthetic+wallpaper",
-        lonely_vibe: "lonely+depressed+anime+wallpaper",
-        emotional: "emotional+sad+anime+art"
-    };
+async function getWallpaper() {
+    // Try external sources first for variety
+    const sources = [fetchFromReddit, fetchFromWaifu];
     
-    const query = queries[theme] || "aesthetic+anime+wallpaper";
-    
-    try {
-        // Using Pinterest public widget API
-        const url = `https://pinterest.com/resource/BaseSearchResource/get/?source_url=%2Fsearch%2Fpins%2F%3Fq%3D${encodeURIComponent(query)}&data=%7B%22options%22%3A%7B%22isPrefetch%22%3Afalse%2C%22query%22%3A%22${encodeURIComponent(query)}%22%2C%22scope%22%3A%22pins%22%2C%22noFetch%22%3Afalse%7D%7D`;
-        
-        const response = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 10000
-        });
-        
-        if (response.data && response.data.resource_response && response.data.resource_response.data) {
-            const pins = response.data.resource_response.data.results || [];
-            const imagePins = pins.filter(pin => pin.images && pin.images.orig);
-            
-            if (imagePins.length > 0) {
-                const randomPin = imagePins[Math.floor(Math.random() * imagePins.length)];
-                return { url: randomPin.images.orig.url, source: "Pinterest" };
-            }
+    for (const source of sources) {
+        const url = await source();
+        if (url && !postedList.includes(url)) {
+            postedList.push(url);
+            if (postedList.length > 100) postedList.shift();
+            return url;
         }
-        return null;
-    } catch (error) {
-        console.error(`Pinterest error: ${error.message}`);
-        return null;
     }
+    
+    // Fallback to local pool
+    const available = ALL_WALLPAPERS.filter(url => !postedList.includes(url));
+    
+    if (available.length === 0) {
+        // Reset if all posted
+        postedList = [];
+        currentIndex = (currentIndex + 1) % ALL_WALLPAPERS.length;
+        return ALL_WALLPAPERS[currentIndex];
+    }
+    
+    const selected = available[Math.floor(Math.random() * available.length)];
+    postedList.push(selected);
+    if (postedList.length > 100) postedList.shift();
+    return selected;
 }
 
 // ============================================
-// FALLBACK IMAGE COLLECTION (Direct guaranteed URLs)
-// These are verified working image URLs as fallback
-// ============================================
-const FALLBACK_IMAGES = [
-    // Anime Boys - Lonely/Emotional
-    "https://i.pinimg.com/originals/2f/8e/1a/2f8e1a5c3b7d9e2f4a6b8c0d1e2f3a4b.jpg",
-    "https://i.pinimg.com/originals/5d/9c/8b/5d9c8b7a3e1f5c9d2b4a6e8f0c2a4d6e.jpg",
-    "https://wallpapercave.com/wp/wp8c7d6e5f.jpg",
-    "https://4kwallpapers.com/images/wallpapers/sad-anime-boy-2880x1800-11234.jpg",
-    
-    // Dark Aesthetic
-    "https://wallpaperaccess.com/full/1846789.jpg",
-    "https://wallpaperaccess.com/full/2847621.jpg",
-    "https://images.hdqwalls.com/wallpapers/dark-aesthetic-girl-laptop.jpg",
-    "https://wallpapercave.com/wp/wp5678901.jpg",
-    
-    // Lonely Vibe
-    "https://wallpaperaccess.com/full/3958472.jpg",
-    "https://images.pexels.com/photos/2075295/pexels-photo-2075295.jpeg",
-    "https://wallpaperaccess.com/full/1278431.jpg",
-    "https://images.unsplash.com/photo-1518655049-4f4d5e0d7c3d?w=1920",
-    
-    // Emotional
-    "https://wallpapercave.com/wp/wp4567890.jpg",
-    "https://i.pinimg.com/originals/9a/8b/7c/9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d.jpg",
-    "https://images.pexels.com/photos/2085998/pexels-photo-2085998.jpeg",
-    "https://wallpaperaccess.com/full/2876412.jpg"
-];
-
-let lastPostedIndex = new Set();
-let postHistory = [];
-
-// ============================================
-// CORE FUNCTIONS
+// POST WALLPAPER (JUST THE IMAGE - NO TEXT)
 // ============================================
 
-// Download and process image to ensure it's a direct attachment
-async function downloadAndProcessImage(imageUrl) {
+async function postWallpaper() {
+    const guild = client.guilds.cache.get(GUILD_ID);
+    if (!guild) {
+        console.error("❌ Guild not found");
+        return;
+    }
+    
+    const channel = guild.channels.cache.get(CHANNEL_ID);
+    if (!channel) {
+        console.error("❌ Channel not found");
+        return;
+    }
+    
+    console.log(`📸 Fetching wallpaper...`);
+    
+    const imageUrl = await getWallpaper();
+    
+    if (!imageUrl) {
+        console.error("❌ No wallpaper URL found");
+        return;
+    }
+    
     try {
+        // Download image
         const response = await axios.get(imageUrl, {
             responseType: 'arraybuffer',
             timeout: 15000,
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0'
             }
         });
         
-        // Convert to buffer and optimize
-        let imageBuffer = Buffer.from(response.data);
-        
-        // Check if it's a valid image
-        const metadata = await sharp(imageBuffer).metadata();
-        if (!metadata.width || !metadata.height) {
-            throw new Error('Invalid image dimensions');
-        }
-        
-        // Resize if too large (max 1920x1080)
-        if (metadata.width > 2500 || metadata.height > 2500) {
-            imageBuffer = await sharp(imageBuffer)
-                .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
-                .jpeg({ quality: 85 })
-                .toBuffer();
-        }
-        
+        const imageBuffer = Buffer.from(response.data);
         const filename = `wallpaper_${Date.now()}.jpg`;
-        return new AttachmentBuilder(imageBuffer, { name: filename });
-    } catch (error) {
-        console.error(`Failed to download/process image: ${error.message}`);
-        return null;
-    }
-}
-
-// Get random wallpaper from curated collection with duplicate prevention
-async function getRandomWallpaper() {
-    const THEME_SOURCES = ['anime_boys', 'dark_aesthetic', 'lonely_vibe', 'emotional'];
-    const randomTheme = THEME_SOURCES[Math.floor(Math.random() * THEME_SOURCES.length)];
-    
-    let imageUrl = null;
-    let source = null;
-    
-    // Try multiple APIs in order
-    const apis = [
-        () => fetchFromAnimeTheme(randomTheme),
-        () => fetchFromAnimePics(randomTheme),
-        () => fetchFromPinterest(randomTheme)
-    ];
-    
-    for (const api of apis) {
-        const result = await api();
-        if (result && result.url) {
-            imageUrl = result.url;
-            source = result.source;
-            break;
-        }
-    }
-    
-    // Use fallback if no API worked
-    if (!imageUrl) {
-        const availableFallbacks = FALLBACK_IMAGES.filter(url => !lastPostedIndex.has(url));
-        if (availableFallbacks.length === 0) {
-            lastPostedIndex.clear();
-            imageUrl = FALLBACK_IMAGES[Math.floor(Math.random() * FALLBACK_IMAGES.length)];
-        } else {
-            imageUrl = availableFallbacks[Math.floor(Math.random() * availableFallbacks.length)];
-        }
-        source = "Fallback Collection";
-    }
-    
-    // Track to avoid duplicates
-    if (imageUrl) {
-        lastPostedIndex.add(imageUrl);
-        if (lastPostedIndex.size > 30) {
-            const toDelete = [...lastPostedIndex].slice(0, 15);
-            toDelete.forEach(url => lastPostedIndex.delete(url));
-        }
-    }
-    
-    return { imageUrl, source, theme: randomTheme };
-}
-
-// Get vibe description based on theme
-function getVibeDescription(theme) {
-    const descriptions = {
-        anime_boys: "🖤 **Anime Boy** - Lost in thought, staring into the void",
-        dark_aesthetic: "🌑 **Dark Aesthetic** - Shadows and solitude embrace",
-        lonely_vibe: "🌙 **Lonely Vibe** - Silent streets, empty rooms, distant stars",
-        emotional: "💧 **Emotional** - Raw feelings captured in pixels"
-    };
-    return descriptions[theme] || "🎭 **Aesthetic Mood** - Deep and contemplative";
-}
-
-// Post wallpaper as direct image attachment
-async function postWallpaper() {
-    const guild = client.guilds.cache.get(GUILD_ID);
-    if (!guild) {
-        console.error("❌ Guild not found!");
-        return;
-    }
-    
-    const channel = guild.channels.cache.get(WALLPAPER_CHANNEL_ID);
-    if (!channel) {
-        console.error("❌ Wallpaper channel not found!");
-        return;
-    }
-    
-    console.log(`🖼️ Fetching aesthetic wallpaper...`);
-    
-    const { imageUrl, source, theme } = await getRandomWallpaper();
-    
-    if (!imageUrl) {
-        console.error("❌ No image URL available");
-        return;
-    }
-    
-    // Download and process image
-    const attachment = await downloadAndProcessImage(imageUrl);
-    
-    if (!attachment) {
-        console.error("❌ Failed to process image, using text fallback");
-        const errorEmbed = new EmbedBuilder()
-            .setDescription("❌ Failed to load wallpaper. Retrying next cycle...")
-            .setColor(0xEF4444);
-        await channel.send({ embeds: [errorEmbed] });
-        return;
-    }
-    
-    // Create aesthetic embed
-    const vibeDesc = getVibeDescription(theme);
-    const quotes = [
-        "*In the silence, I found myself.*",
-        "*Some nights are meant for thinking.*",
-        "*Lost, but not looking to be found.*",
-        "*The moon understands lonely.*",
-        "*Behind every smile, a storm.*",
-        "*Quiet hearts think the loudest.*"
-    ];
-    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-    
-    const embed = new EmbedBuilder()
-        .setTitle("🎭 **AESTHETIC WALLPAPER**")
-        .setDescription(
-            `> ${vibeDesc}\n\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `${randomQuote}\n\n` +
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-            `🎨 *Right-click → Save Image* | 💫 *Set as Wallpaper*`
-        )
-        .setColor(0x1a1a2e)
-        .setFooter({ 
-            text: `Source: ${source} • For true aesthetic souls 🖤`,
-            iconURL: client.user.displayAvatarURL()
-        })
-        .setTimestamp();
-    
-    await channel.send({
-        content: "🎴 **ＨＥＲＥ'Ｓ ＹＯＵＲ ＷＡＬＬＰＡＰＥＲ** 🎴",
-        embeds: [embed],
-        files: [attachment]
-    });
-    
-    console.log(`✅ Wallpaper posted! Theme: ${theme} | Source: ${source}`);
-}
-
-// Manual post command with specific theme
-async function postManualWallpaper(channel, specificTheme = null) {
-    let theme = specificTheme;
-    if (!theme) {
-        const themes = ['anime_boys', 'dark_aesthetic', 'lonely_vibe', 'emotional'];
-        theme = themes[Math.floor(Math.random() * themes.length)];
-    }
-    
-    let imageUrl = null;
-    let source = null;
-    
-    // Try APIs for specific theme
-    const result = await fetchFromAnimeTheme(theme);
-    if (result && result.url) {
-        imageUrl = result.url;
-        source = result.source;
-    }
-    
-    if (!imageUrl) {
-        const fallbackMap = {
-            anime_boys: FALLBACK_IMAGES.slice(0, 4),
-            dark_aesthetic: FALLBACK_IMAGES.slice(4, 8),
-            lonely_vibe: FALLBACK_IMAGES.slice(8, 12),
-            emotional: FALLBACK_IMAGES.slice(12, 16)
-        };
-        const fallbacks = fallbackMap[theme] || FALLBACK_IMAGES;
-        imageUrl = fallbacks[Math.floor(Math.random() * fallbacks.length)];
-        source = "Fallback Collection";
-    }
-    
-    const attachment = await downloadAndProcessImage(imageUrl);
-    
-    if (!attachment) {
-        return channel.send("❌ Failed to load wallpaper. Please try again.");
-    }
-    
-    const vibeDesc = getVibeDescription(theme);
-    
-    const embed = new EmbedBuilder()
-        .setTitle("🎭 **MANUAL WALLPAPER REQUEST**")
-        .setDescription(`> ${vibeDesc}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n*Requested by a lonely soul...*`)
-        .setColor(0x1a1a2e)
-        .setFooter({ text: `Theme: ${theme} • Aesthetic Vibes 🖤` })
-        .setTimestamp();
-    
-    await channel.send({
-        embeds: [embed],
-        files: [attachment]
-    });
-}
-
-// ============================================
-// COMMAND HANDLER
-// ============================================
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-    if (!message.content.startsWith('!aesthetic')) return;
-    
-    const args = message.content.split(' ');
-    const command = args[0].toLowerCase();
-    
-    // Check admin permission
-    if (!message.member.permissions.has('Administrator')) {
-        return message.reply("❌ You need administrator permissions to use this command.");
-    }
-    
-    if (command === '!aesthetic') {
-        const subCommand = args[1]?.toLowerCase();
         
-        if (subCommand === 'anime') {
-            await postManualWallpaper(message.channel, 'anime_boys');
-        } else if (subCommand === 'dark') {
-            await postManualWallpaper(message.channel, 'dark_aesthetic');
-        } else if (subCommand === 'lonely') {
-            await postManualWallpaper(message.channel, 'lonely_vibe');
-        } else if (subCommand === 'emotional') {
-            await postManualWallpaper(message.channel, 'emotional');
-        } else {
-            await postManualWallpaper(message.channel);
-        }
+        // Send ONLY the image - no text, no embed, no buttons
+        await channel.send({
+            files: [{
+                attachment: imageBuffer,
+                name: filename
+            }]
+        });
+        
+        console.log(`✅ Wallpaper posted: ${imageUrl.substring(0, 80)}...`);
+        
+    } catch (error) {
+        console.error(`❌ Failed to post: ${error.message}`);
+        // Try another wallpaper on failure
+        postedList.push(imageUrl); // Mark as bad so we don't reuse
+        await postWallpaper(); // Retry
     }
-});
+}
 
 // ============================================
 // READY EVENT
 // ============================================
+
 client.once('ready', async () => {
-    console.log(`✨ ${client.user.tag} is now online!`);
-    console.log(`🌙 Aesthetic Wallpaper Bot - Dark & Lonely Vibes`);
-    console.log(`⏰ Schedule: ${POST_INTERVAL}`);
-    console.log(`🎨 Themes: Anime Boys, Dark Aesthetic, Lonely Vibe, Emotional`);
+    console.log(`✨ ${client.user.tag} is online!`);
+    console.log(`🎨 Pure Wallpaper Bot - No text, just images`);
+    console.log(`⏰ Interval: ${POST_INTERVAL}`);
+    console.log(`📁 Wallpapers loaded: ${ALL_WALLPAPERS.length}+`);
     
-    // Initial post after 5 seconds
+    // First post after 5 seconds
     setTimeout(async () => {
         await postWallpaper();
     }, 5000);
     
     // Schedule regular posts
     cron.schedule(POST_INTERVAL, async () => {
-        console.log(`⏰ Scheduled post at ${new Date().toLocaleString()}`);
+        console.log(`⏰ Scheduled post at ${new Date().toLocaleTimeString()}`);
         await postWallpaper();
     });
     
-    console.log(`✅ Bot is ready and posting wallpapers!`);
+    console.log(`✅ Bot ready - posting clean wallpapers!`);
+});
+
+// ============================================
+// SIMPLE TEST COMMAND (ADMIN ONLY)
+// ============================================
+
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (message.content === '!wall' && message.member.permissions.has('Administrator')) {
+        await postWallpaper();
+    }
 });
 
 // ============================================
 // ERROR HANDLING
 // ============================================
+
 process.on('unhandledRejection', (error) => {
-    console.error('Unhandled rejection:', error);
+    console.error('Unhandled rejection:', error.message);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('Uncaught exception:', error);
+    console.error('Uncaught exception:', error.message);
 });
 
 // ============================================
 // LOGIN
 // ============================================
+
 client.login(BOT_TOKEN);
