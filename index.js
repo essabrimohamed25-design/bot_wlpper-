@@ -3,23 +3,7 @@ const { Client, GatewayIntentBits, EmbedBuilder, AuditLogEvent } = require('disc
 // ============================================
 // ENVIRONMENT VARIABLES
 // ============================================
-const {
-    BOT_TOKEN,
-    GUILD_ID,
-    MEMBER_JOIN_LOG_ID,
-    MEMBER_LEAVE_LOG_ID,
-    MESSAGE_DELETE_LOG_ID,
-    MESSAGE_EDIT_LOG_ID,
-    ROLE_UPDATE_LOG_ID,
-    CHANNEL_LOG_ID,
-    VOICE_LOG_ID,
-    BAN_LOG_ID,
-    TIMEOUT_LOG_ID,
-    NICKNAME_LOG_ID,
-    INVITE_LOG_ID,
-    EMOJI_STICKER_LOG_ID,
-    SERVER_UPDATE_LOG_ID
-} = process.env;
+const { BOT_TOKEN, GUILD_ID, LOG_CHANNEL_ID } = process.env;
 
 // ============================================
 // CLIENT INITIALIZATION
@@ -40,29 +24,20 @@ const client = new Client({
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
-
-async function sendLog(guild, channelId, embed) {
-    if (!channelId) return;
-    const channel = guild.channels.cache.get(channelId);
+async function sendLog(guild, embed) {
+    if (!LOG_CHANNEL_ID) return;
+    const channel = guild.channels.cache.get(LOG_CHANNEL_ID);
     if (channel) {
         await channel.send({ embeds: [embed] }).catch(err => console.error(`Failed to send log:`, err.message));
     }
 }
 
-async function getAuditLogEntry(guild, actionType, targetId, timeout = 5000) {
+async function getModerator(guild, actionType, targetId, timeout = 5000) {
     try {
-        const fetchedLogs = await guild.fetchAuditLogs({
-            type: actionType,
-            limit: 10
-        });
-        
-        const logEntry = fetchedLogs.entries.find(entry => entry.target.id === targetId);
-        if (logEntry && (Date.now() - logEntry.createdTimestamp) < timeout) {
-            return {
-                executor: logEntry.executor,
-                reason: logEntry.reason || "No reason provided",
-                createdAt: logEntry.createdTimestamp
-            };
+        const logs = await guild.fetchAuditLogs({ type: actionType, limit: 5 });
+        const entry = logs.entries.find(e => e.target.id === targetId);
+        if (entry && (Date.now() - entry.createdTimestamp) < timeout) {
+            return { executor: entry.executor, reason: entry.reason || "No reason provided" };
         }
         return null;
     } catch (error) {
@@ -71,51 +46,49 @@ async function getAuditLogEntry(guild, actionType, targetId, timeout = 5000) {
 }
 
 // ============================================
-// MEMBER JOIN LOG
+// MEMBER JOIN
 // ============================================
 client.on('guildMemberAdd', async (member) => {
     if (member.guild.id !== GUILD_ID) return;
     
     const embed = new EmbedBuilder()
-        .setTitle("👋 MEMBER JOINED")
+        .setTitle("👋 Member Joined")
         .setDescription(`**${member.user.tag}** joined the server`)
         .setColor(0x22C55E)
         .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
         .addFields(
             { name: "User ID", value: `\`${member.user.id}\``, inline: true },
             { name: "Account Created", value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
-            { name: "Member Count", value: `${member.guild.memberCount} members`, inline: true }
+            { name: "Member Count", value: `${member.guild.memberCount}`, inline: true }
         )
-        .setTimestamp()
-        .setFooter({ text: `ID: ${member.user.id}` });
+        .setTimestamp();
     
-    await sendLog(member.guild, MEMBER_JOIN_LOG_ID, embed);
+    await sendLog(member.guild, embed);
 });
 
 // ============================================
-// MEMBER LEAVE LOG
+// MEMBER LEAVE
 // ============================================
 client.on('guildMemberRemove', async (member) => {
     if (member.guild.id !== GUILD_ID) return;
     
     const embed = new EmbedBuilder()
-        .setTitle("👋 MEMBER LEFT")
+        .setTitle("👋 Member Left")
         .setDescription(`**${member.user.tag}** left the server`)
         .setColor(0xEF4444)
         .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
         .addFields(
             { name: "User ID", value: `\`${member.user.id}\``, inline: true },
             { name: "Joined At", value: member.joinedAt ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : "Unknown", inline: true },
-            { name: "Member Count", value: `${member.guild.memberCount} members`, inline: true }
+            { name: "Member Count", value: `${member.guild.memberCount}`, inline: true }
         )
-        .setTimestamp()
-        .setFooter({ text: `ID: ${member.user.id}` });
+        .setTimestamp();
     
-    await sendLog(member.guild, MEMBER_LEAVE_LOG_ID, embed);
+    await sendLog(member.guild, embed);
 });
 
 // ============================================
-// MESSAGE DELETE LOG
+// MESSAGE DELETE
 // ============================================
 client.on('messageDelete', async (message) => {
     if (!message.guild || message.guild.id !== GUILD_ID) return;
@@ -123,7 +96,7 @@ client.on('messageDelete', async (message) => {
     if (!message.content && message.attachments.size === 0) return;
     
     const embed = new EmbedBuilder()
-        .setTitle("🗑️ MESSAGE DELETED")
+        .setTitle("🗑️ Message Deleted")
         .setColor(0xF97316)
         .addFields(
             { name: "Author", value: `${message.author?.tag || "Unknown"} \`${message.author?.id || "Unknown"}\``, inline: false },
@@ -133,19 +106,18 @@ client.on('messageDelete', async (message) => {
         .setTimestamp();
     
     if (message.content) {
-        embed.addFields({ name: "Content", value: message.content.substring(0, 1000) || "(Empty)", inline: false });
+        embed.addFields({ name: "Content", value: message.content.substring(0, 1000), inline: false });
     }
     
     if (message.attachments.size > 0) {
-        const attachments = Array.from(message.attachments.values()).map(a => `[${a.name}](${a.url})`).join("\n");
-        embed.addFields({ name: "Attachments", value: attachments.substring(0, 1000), inline: false });
+        embed.addFields({ name: "Attachments", value: `${message.attachments.size} attachment(s)`, inline: false });
     }
     
-    await sendLog(message.guild, MESSAGE_DELETE_LOG_ID, embed);
+    await sendLog(message.guild, embed);
 });
 
 // ============================================
-// MESSAGE EDIT LOG
+// MESSAGE EDIT
 // ============================================
 client.on('messageUpdate', async (oldMessage, newMessage) => {
     if (!oldMessage.guild || oldMessage.guild.id !== GUILD_ID) return;
@@ -154,63 +126,150 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
     if (!oldMessage.content && !newMessage.content) return;
     
     const embed = new EmbedBuilder()
-        .setTitle("✏️ MESSAGE EDITED")
+        .setTitle("✏️ Message Edited")
         .setColor(0x3B82F6)
         .addFields(
             { name: "Author", value: `${oldMessage.author?.tag || "Unknown"} \`${oldMessage.author?.id || "Unknown"}\``, inline: false },
             { name: "Channel", value: `${oldMessage.channel.name} (${oldMessage.channel})`, inline: true },
-            { name: "Message ID", value: `\`${oldMessage.id}\``, inline: true },
             { name: "Before", value: oldMessage.content?.substring(0, 500) || "(Empty)", inline: false },
             { name: "After", value: newMessage.content?.substring(0, 500) || "(Empty)", inline: false }
         )
-        .setTimestamp()
-        .setFooter({ text: `Jump to message`, iconURL: oldMessage.author?.displayAvatarURL() });
+        .setTimestamp();
     
-    if (newMessage.url) {
-        embed.setURL(newMessage.url);
-    }
-    
-    await sendLog(oldMessage.guild, MESSAGE_EDIT_LOG_ID, embed);
+    await sendLog(oldMessage.guild, embed);
 });
 
 // ============================================
-// ROLE CREATE LOG
+// BAN
+// ============================================
+client.on('guildBanAdd', async (ban) => {
+    if (ban.guild.id !== GUILD_ID) return;
+    
+    const audit = await getModerator(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
+    
+    const embed = new EmbedBuilder()
+        .setTitle("🔨 Member Banned")
+        .setDescription(`**${ban.user.tag}** was banned`)
+        .setColor(0xEF4444)
+        .setThumbnail(ban.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .addFields(
+            { name: "User ID", value: `\`${ban.user.id}\``, inline: true },
+            { name: "Reason", value: audit?.reason || "No reason provided", inline: false }
+        )
+        .setTimestamp();
+    
+    if (audit?.executor) {
+        embed.addFields({ name: "Banned By", value: `${audit.executor.tag} \`${audit.executor.id}\``, inline: false });
+    }
+    
+    await sendLog(ban.guild, embed);
+});
+
+// ============================================
+// UNBAN
+// ============================================
+client.on('guildBanRemove', async (ban) => {
+    if (ban.guild.id !== GUILD_ID) return;
+    
+    const audit = await getModerator(ban.guild, AuditLogEvent.MemberBanRemove, ban.user.id);
+    
+    const embed = new EmbedBuilder()
+        .setTitle("✅ Member Unbanned")
+        .setDescription(`**${ban.user.tag}** was unbanned`)
+        .setColor(0x22C55E)
+        .setThumbnail(ban.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .addFields({ name: "User ID", value: `\`${ban.user.id}\``, inline: true })
+        .setTimestamp();
+    
+    if (audit?.executor) {
+        embed.addFields({ name: "Unbanned By", value: `${audit.executor.tag} \`${audit.executor.id}\``, inline: false });
+    }
+    
+    await sendLog(ban.guild, embed);
+});
+
+// ============================================
+// TIMEOUT
+// ============================================
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+    if (oldMember.guild.id !== GUILD_ID) return;
+    
+    const wasTimedOut = oldMember.communicationDisabledUntil;
+    const isTimedOut = newMember.communicationDisabledUntil;
+    
+    // Timeout added
+    if (!wasTimedOut && isTimedOut) {
+        const audit = await getModerator(newMember.guild, AuditLogEvent.MemberUpdate, newMember.id);
+        const duration = Math.floor((isTimedOut.getTime() - Date.now()) / 1000 / 60);
+        const durationText = duration > 60 ? `${Math.floor(duration / 60)} hours` : `${duration} minutes`;
+        
+        const embed = new EmbedBuilder()
+            .setTitle("⏰ Member Timed Out")
+            .setDescription(`**${newMember.user.tag}** was timed out`)
+            .setColor(0xF97316)
+            .addFields(
+                { name: "User", value: `${newMember.user.tag} \`${newMember.user.id}\``, inline: false },
+                { name: "Duration", value: durationText, inline: true },
+                { name: "Expires", value: `<t:${Math.floor(isTimedOut.getTime() / 1000)}:R>`, inline: true },
+                { name: "Reason", value: audit?.reason || "No reason provided", inline: false }
+            )
+            .setTimestamp();
+        
+        if (audit?.executor) {
+            embed.addFields({ name: "Moderator", value: `${audit.executor.tag} \`${audit.executor.id}\``, inline: false });
+        }
+        
+        await sendLog(newMember.guild, embed);
+    }
+    
+    // Timeout removed
+    if (wasTimedOut && !isTimedOut) {
+        const embed = new EmbedBuilder()
+            .setTitle("✅ Timeout Removed")
+            .setDescription(`**${newMember.user.tag}** is no longer timed out`)
+            .setColor(0x22C55E)
+            .addFields({ name: "User", value: `${newMember.user.tag} \`${newMember.user.id}\``, inline: false })
+            .setTimestamp();
+        
+        await sendLog(newMember.guild, embed);
+    }
+});
+
+// ============================================
+// ROLE CREATE
 // ============================================
 client.on('roleCreate', async (role) => {
     if (role.guild.id !== GUILD_ID) return;
     
-    const audit = await getAuditLogEntry(role.guild, AuditLogEvent.RoleCreate, role.id);
+    const audit = await getModerator(role.guild, AuditLogEvent.RoleCreate, role.id);
     
     const embed = new EmbedBuilder()
-        .setTitle("🆕 ROLE CREATED")
+        .setTitle("🆕 Role Created")
         .setColor(0x22C55E)
         .addFields(
             { name: "Role Name", value: role.name, inline: true },
             { name: "Role ID", value: `\`${role.id}\``, inline: true },
-            { name: "Color", value: role.hexColor.toUpperCase(), inline: true },
-            { name: "Position", value: `${role.position}`, inline: true },
-            { name: "Mentionable", value: role.mentionable ? "Yes" : "No", inline: true },
-            { name: "Display Separately", value: role.hoist ? "Yes" : "No", inline: true }
+            { name: "Color", value: role.hexColor.toUpperCase(), inline: true }
         )
         .setTimestamp();
     
-    if (audit) {
+    if (audit?.executor) {
         embed.addFields({ name: "Created By", value: `${audit.executor.tag} \`${audit.executor.id}\``, inline: false });
     }
     
-    await sendLog(role.guild, ROLE_UPDATE_LOG_ID, embed);
+    await sendLog(role.guild, embed);
 });
 
 // ============================================
-// ROLE DELETE LOG
+// ROLE DELETE
 // ============================================
 client.on('roleDelete', async (role) => {
     if (role.guild.id !== GUILD_ID) return;
     
-    const audit = await getAuditLogEntry(role.guild, AuditLogEvent.RoleDelete, role.id);
+    const audit = await getModerator(role.guild, AuditLogEvent.RoleDelete, role.id);
     
     const embed = new EmbedBuilder()
-        .setTitle("🗑️ ROLE DELETED")
+        .setTitle("🗑️ Role Deleted")
         .setColor(0xEF4444)
         .addFields(
             { name: "Role Name", value: role.name, inline: true },
@@ -218,96 +277,92 @@ client.on('roleDelete', async (role) => {
         )
         .setTimestamp();
     
-    if (audit) {
+    if (audit?.executor) {
         embed.addFields({ name: "Deleted By", value: `${audit.executor.tag} \`${audit.executor.id}\``, inline: false });
     }
     
-    await sendLog(role.guild, ROLE_UPDATE_LOG_ID, embed);
+    await sendLog(role.guild, embed);
 });
 
 // ============================================
-// ROLE UPDATE LOG
+// ROLE UPDATE
 // ============================================
 client.on('roleUpdate', async (oldRole, newRole) => {
     if (oldRole.guild.id !== GUILD_ID) return;
     
     const changes = [];
     if (oldRole.name !== newRole.name) changes.push(`**Name:** ${oldRole.name} → ${newRole.name}`);
-    if (oldRole.hexColor !== newRole.hexColor) changes.push(`**Color:** ${oldRole.hexColor.toUpperCase()} → ${newRole.hexColor.toUpperCase()}`);
+    if (oldRole.hexColor !== newRole.hexColor) changes.push(`**Color:** ${oldRole.hexColor} → ${newRole.hexColor}`);
     if (oldRole.mentionable !== newRole.mentionable) changes.push(`**Mentionable:** ${oldRole.mentionable ? "Yes" : "No"} → ${newRole.mentionable ? "Yes" : "No"}`);
-    if (oldRole.hoist !== newRole.hoist) changes.push(`**Display Separately:** ${oldRole.hoist ? "Yes" : "No"} → ${newRole.hoist ? "Yes" : "No"}`);
-    if (oldRole.position !== newRole.position) changes.push(`**Position:** ${oldRole.position} → ${newRole.position}`);
     
     if (changes.length === 0) return;
     
     const embed = new EmbedBuilder()
-        .setTitle("⚙️ ROLE UPDATED")
+        .setTitle("⚙️ Role Updated")
         .setDescription(`Role **${oldRole.name}** was modified`)
         .setColor(0xF59E0B)
         .addFields({ name: "Changes", value: changes.join("\n"), inline: false })
         .setTimestamp();
     
-    await sendLog(oldRole.guild, ROLE_UPDATE_LOG_ID, embed);
+    await sendLog(oldRole.guild, embed);
 });
 
 // ============================================
-// CHANNEL CREATE LOG
+// CHANNEL CREATE
 // ============================================
 client.on('channelCreate', async (channel) => {
     if (channel.guild.id !== GUILD_ID) return;
-    if (channel.type === 4) return; // Skip category channels
+    if (channel.type === 4) return;
     
-    const audit = await getAuditLogEntry(channel.guild, AuditLogEvent.ChannelCreate, channel.id);
-    
-    const channelType = channel.type === 0 ? "Text" : channel.type === 2 ? "Voice" : channel.type === 5 ? "Announcement" : "Unknown";
+    const audit = await getModerator(channel.guild, AuditLogEvent.ChannelCreate, channel.id);
+    const type = channel.type === 0 ? "Text" : channel.type === 2 ? "Voice" : "Other";
     
     const embed = new EmbedBuilder()
-        .setTitle("📝 CHANNEL CREATED")
+        .setTitle("📝 Channel Created")
         .setColor(0x22C55E)
         .addFields(
-            { name: "Channel Name", value: `${channel.name}`, inline: true },
+            { name: "Channel Name", value: channel.name, inline: true },
             { name: "Channel ID", value: `\`${channel.id}\``, inline: true },
-            { name: "Type", value: channelType, inline: true }
+            { name: "Type", value: type, inline: true }
         )
         .setTimestamp();
     
-    if (audit) {
+    if (audit?.executor) {
         embed.addFields({ name: "Created By", value: `${audit.executor.tag} \`${audit.executor.id}\``, inline: false });
     }
     
-    await sendLog(channel.guild, CHANNEL_LOG_ID, embed);
+    await sendLog(channel.guild, embed);
 });
 
 // ============================================
-// CHANNEL DELETE LOG
+// CHANNEL DELETE
 // ============================================
 client.on('channelDelete', async (channel) => {
     if (!channel.guild || channel.guild.id !== GUILD_ID) return;
     if (channel.type === 4) return;
     
-    const audit = await getAuditLogEntry(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
-    
-    const channelType = channel.type === 0 ? "Text" : channel.type === 2 ? "Voice" : channel.type === 5 ? "Announcement" : "Unknown";
+    const audit = await getModerator(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
+    const type = channel.type === 0 ? "Text" : channel.type === 2 ? "Voice" : "Other";
     
     const embed = new EmbedBuilder()
-        .setTitle("🗑️ CHANNEL DELETED")
+        .setTitle("🗑️ Channel Deleted")
         .setColor(0xEF4444)
         .addFields(
             { name: "Channel Name", value: channel.name, inline: true },
             { name: "Channel ID", value: `\`${channel.id}\``, inline: true },
-            { name: "Type", value: channelType, inline: true }
+            { name: "Type", value: type, inline: true }
         )
         .setTimestamp();
     
-    if (audit) {
+    if (audit?.executor) {
         embed.addFields({ name: "Deleted By", value: `${audit.executor.tag} \`${audit.executor.id}\``, inline: false });
     }
     
-    await sendLog(channel.guild, CHANNEL_LOG_ID, embed);
+    await sendLog(channel.guild, embed);
 });
 
 // ============================================
-// VOICE LOGS
+// VOICE UPDATES
 // ============================================
 client.on('voiceStateUpdate', async (oldState, newState) => {
     if (oldState.guild.id !== GUILD_ID) return;
@@ -327,7 +382,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
     
     const embed = new EmbedBuilder()
-        .setTitle("🎤 VOICE UPDATE")
+        .setTitle("🎤 Voice Update")
         .setDescription(action)
         .setColor(0x8B5CF6)
         .addFields(
@@ -337,162 +392,11 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         )
         .setTimestamp();
     
-    await sendLog(oldState.guild, VOICE_LOG_ID, embed);
+    await sendLog(oldState.guild, embed);
 });
 
 // ============================================
-// BAN LOG (FIXED)
-// ============================================
-client.on('guildBanAdd', async (ban) => {
-    if (ban.guild.id !== GUILD_ID) return;
-    
-    // Get audit log for the ban
-    let moderator = null;
-    let banReason = "No reason provided";
-    
-    try {
-        const auditLogs = await ban.guild.fetchAuditLogs({
-            type: AuditLogEvent.MemberBanAdd,
-            limit: 5
-        });
-        
-        const banEntry = auditLogs.entries.find(entry => entry.target.id === ban.user.id);
-        if (banEntry) {
-            moderator = banEntry.executor;
-            banReason = banEntry.reason || "No reason provided";
-        }
-    } catch (error) {
-        console.error("Failed to fetch ban audit log:", error.message);
-    }
-    
-    const embed = new EmbedBuilder()
-        .setTitle("🔨 MEMBER BANNED")
-        .setDescription(`**${ban.user.tag}** was banned from the server`)
-        .setColor(0xEF4444)
-        .setThumbnail(ban.user.displayAvatarURL({ dynamic: true, size: 256 }))
-        .addFields(
-            { name: "User ID", value: `\`${ban.user.id}\``, inline: true },
-            { name: "Reason", value: banReason, inline: false }
-        )
-        .setTimestamp();
-    
-    if (moderator) {
-        embed.addFields({ name: "Banned By", value: `${moderator.tag} \`${moderator.id}\``, inline: false });
-    }
-    
-    await sendLog(ban.guild, BAN_LOG_ID, embed);
-    console.log(`✅ Ban logged: ${ban.user.tag} was banned`);
-});
-
-// ============================================
-// UNBAN LOG (FIXED)
-// ============================================
-client.on('guildBanRemove', async (ban) => {
-    if (ban.guild.id !== GUILD_ID) return;
-    
-    // Get audit log for the unban
-    let moderator = null;
-    
-    try {
-        const auditLogs = await ban.guild.fetchAuditLogs({
-            type: AuditLogEvent.MemberBanRemove,
-            limit: 5
-        });
-        
-        const unbanEntry = auditLogs.entries.find(entry => entry.target.id === ban.user.id);
-        if (unbanEntry) {
-            moderator = unbanEntry.executor;
-        }
-    } catch (error) {
-        console.error("Failed to fetch unban audit log:", error.message);
-    }
-    
-    const embed = new EmbedBuilder()
-        .setTitle("✅ MEMBER UNBANNED")
-        .setDescription(`**${ban.user.tag}** was unbanned from the server`)
-        .setColor(0x22C55E)
-        .setThumbnail(ban.user.displayAvatarURL({ dynamic: true, size: 256 }))
-        .addFields(
-            { name: "User ID", value: `\`${ban.user.id}\``, inline: true }
-        )
-        .setTimestamp();
-    
-    if (moderator) {
-        embed.addFields({ name: "Unbanned By", value: `${moderator.tag} \`${moderator.id}\``, inline: false });
-    }
-    
-    await sendLog(ban.guild, BAN_LOG_ID, embed);
-    console.log(`✅ Unban logged: ${ban.user.tag} was unbanned`);
-});
-
-// ============================================
-// TIMEOUT LOG (Member timed out)
-// ============================================
-client.on('guildMemberUpdate', async (oldMember, newMember) => {
-    if (oldMember.guild.id !== GUILD_ID) return;
-    
-    const wasTimedOut = oldMember.communicationDisabledUntil;
-    const isTimedOut = newMember.communicationDisabledUntil;
-    
-    // Member was timed out
-    if (!wasTimedOut && isTimedOut) {
-        let moderator = null;
-        let timeoutReason = "No reason provided";
-        
-        try {
-            const auditLogs = await newMember.guild.fetchAuditLogs({
-                type: AuditLogEvent.MemberUpdate,
-                limit: 5
-            });
-            
-            const timeoutEntry = auditLogs.entries.find(entry => entry.target.id === newMember.id);
-            if (timeoutEntry) {
-                moderator = timeoutEntry.executor;
-                timeoutReason = timeoutEntry.reason || "No reason provided";
-            }
-        } catch (error) {
-            console.error("Failed to fetch timeout audit log:", error.message);
-        }
-        
-        const duration = Math.floor((isTimedOut.getTime() - Date.now()) / 1000 / 60);
-        const durationText = duration > 60 ? `${Math.floor(duration / 60)} hours` : `${duration} minutes`;
-        
-        const embed = new EmbedBuilder()
-            .setTitle("⏰ MEMBER TIMED OUT")
-            .setDescription(`**${newMember.user.tag}** was timed out`)
-            .setColor(0xF97316)
-            .addFields(
-                { name: "User", value: `${newMember.user.tag} \`${newMember.user.id}\``, inline: false },
-                { name: "Duration", value: durationText, inline: true },
-                { name: "Expires", value: `<t:${Math.floor(isTimedOut.getTime() / 1000)}:R>`, inline: true },
-                { name: "Reason", value: timeoutReason, inline: false }
-            )
-            .setTimestamp();
-        
-        if (moderator) {
-            embed.addFields({ name: "Moderator", value: `${moderator.tag} \`${moderator.id}\``, inline: false });
-        }
-        
-        await sendLog(newMember.guild, TIMEOUT_LOG_ID, embed);
-    }
-    
-    // Member had timeout removed
-    if (wasTimedOut && !isTimedOut) {
-        const embed = new EmbedBuilder()
-            .setTitle("✅ TIMEOUT REMOVED")
-            .setDescription(`**${newMember.user.tag}** is no longer timed out`)
-            .setColor(0x22C55E)
-            .addFields(
-                { name: "User", value: `${newMember.user.tag} \`${newMember.user.id}\``, inline: false }
-            )
-            .setTimestamp();
-        
-        await sendLog(newMember.guild, TIMEOUT_LOG_ID, embed);
-    }
-});
-
-// ============================================
-// NICKNAME CHANGE LOG
+// NICKNAME CHANGE
 // ============================================
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
     if (oldMember.guild.id !== GUILD_ID) return;
@@ -502,7 +406,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     const newNick = newMember.nickname || newMember.user.username;
     
     const embed = new EmbedBuilder()
-        .setTitle("✏️ NICKNAME CHANGED")
+        .setTitle("✏️ Nickname Changed")
         .setDescription(`**${oldMember.user.tag}** changed their nickname`)
         .setColor(0x3B82F6)
         .addFields(
@@ -511,17 +415,17 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
         )
         .setTimestamp();
     
-    await sendLog(oldMember.guild, NICKNAME_LOG_ID, embed);
+    await sendLog(oldMember.guild, embed);
 });
 
 // ============================================
-// INVITE CREATE LOG
+// INVITE CREATE
 // ============================================
 client.on('inviteCreate', async (invite) => {
     if (invite.guild.id !== GUILD_ID) return;
     
     const embed = new EmbedBuilder()
-        .setTitle("🔗 INVITE CREATED")
+        .setTitle("🔗 Invite Created")
         .setColor(0x22C55E)
         .addFields(
             { name: "Code", value: invite.code, inline: true },
@@ -532,17 +436,17 @@ client.on('inviteCreate', async (invite) => {
         )
         .setTimestamp();
     
-    await sendLog(invite.guild, INVITE_LOG_ID, embed);
+    await sendLog(invite.guild, embed);
 });
 
 // ============================================
-// INVITE DELETE LOG
+// INVITE DELETE
 // ============================================
 client.on('inviteDelete', async (invite) => {
     if (invite.guild.id !== GUILD_ID) return;
     
     const embed = new EmbedBuilder()
-        .setTitle("🗑️ INVITE DELETED")
+        .setTitle("🗑️ Invite Deleted")
         .setColor(0xEF4444)
         .addFields(
             { name: "Code", value: invite.code, inline: true },
@@ -550,27 +454,19 @@ client.on('inviteDelete', async (invite) => {
         )
         .setTimestamp();
     
-    await sendLog(invite.guild, INVITE_LOG_ID, embed);
+    await sendLog(invite.guild, embed);
 });
 
 // ============================================
-// EMOJI CREATE LOG
+// EMOJI CREATE
 // ============================================
 client.on('emojiCreate', async (emoji) => {
     if (emoji.guild.id !== GUILD_ID) return;
     
-    let creator = null;
-    try {
-        const auditLogs = await emoji.guild.fetchAuditLogs({
-            type: AuditLogEvent.EmojiCreate,
-            limit: 5
-        });
-        const emojiEntry = auditLogs.entries.find(entry => entry.target.id === emoji.id);
-        if (emojiEntry) creator = emojiEntry.executor;
-    } catch (error) {}
+    const audit = await getModerator(emoji.guild, AuditLogEvent.EmojiCreate, emoji.id);
     
     const embed = new EmbedBuilder()
-        .setTitle("😀 EMOJI ADDED")
+        .setTitle("😀 Emoji Added")
         .setColor(0x22C55E)
         .addFields(
             { name: "Name", value: emoji.name, inline: true },
@@ -580,31 +476,23 @@ client.on('emojiCreate', async (emoji) => {
         .setThumbnail(emoji.url)
         .setTimestamp();
     
-    if (creator) {
-        embed.addFields({ name: "Added By", value: `${creator.tag} \`${creator.id}\``, inline: false });
+    if (audit?.executor) {
+        embed.addFields({ name: "Added By", value: `${audit.executor.tag} \`${audit.executor.id}\``, inline: false });
     }
     
-    await sendLog(emoji.guild, EMOJI_STICKER_LOG_ID, embed);
+    await sendLog(emoji.guild, embed);
 });
 
 // ============================================
-// EMOJI DELETE LOG
+// EMOJI DELETE
 // ============================================
 client.on('emojiDelete', async (emoji) => {
     if (emoji.guild.id !== GUILD_ID) return;
     
-    let deleter = null;
-    try {
-        const auditLogs = await emoji.guild.fetchAuditLogs({
-            type: AuditLogEvent.EmojiDelete,
-            limit: 5
-        });
-        const emojiEntry = auditLogs.entries.find(entry => entry.target.id === emoji.id);
-        if (emojiEntry) deleter = emojiEntry.executor;
-    } catch (error) {}
+    const audit = await getModerator(emoji.guild, AuditLogEvent.EmojiDelete, emoji.id);
     
     const embed = new EmbedBuilder()
-        .setTitle("🗑️ EMOJI REMOVED")
+        .setTitle("🗑️ Emoji Removed")
         .setColor(0xEF4444)
         .addFields(
             { name: "Name", value: emoji.name, inline: true },
@@ -612,84 +500,33 @@ client.on('emojiDelete', async (emoji) => {
         )
         .setTimestamp();
     
-    if (deleter) {
-        embed.addFields({ name: "Removed By", value: `${deleter.tag} \`${deleter.id}\``, inline: false });
+    if (audit?.executor) {
+        embed.addFields({ name: "Removed By", value: `${audit.executor.tag} \`${audit.executor.id}\``, inline: false });
     }
     
-    await sendLog(emoji.guild, EMOJI_STICKER_LOG_ID, embed);
+    await sendLog(emoji.guild, embed);
 });
 
 // ============================================
-// STICKER CREATE LOG
-// ============================================
-client.on('stickerCreate', async (sticker) => {
-    if (sticker.guild.id !== GUILD_ID) return;
-    
-    const embed = new EmbedBuilder()
-        .setTitle("🏷️ STICKER ADDED")
-        .setColor(0x22C55E)
-        .addFields(
-            { name: "Name", value: sticker.name, inline: true },
-            { name: "ID", value: `\`${sticker.id}\``, inline: true },
-            { name: "Format", value: sticker.format, inline: true }
-        )
-        .setTimestamp();
-    
-    await sendLog(sticker.guild, EMOJI_STICKER_LOG_ID, embed);
-});
-
-// ============================================
-// STICKER DELETE LOG
-// ============================================
-client.on('stickerDelete', async (sticker) => {
-    if (sticker.guild.id !== GUILD_ID) return;
-    
-    const embed = new EmbedBuilder()
-        .setTitle("🗑️ STICKER REMOVED")
-        .setColor(0xEF4444)
-        .addFields(
-            { name: "Name", value: sticker.name, inline: true },
-            { name: "ID", value: `\`${sticker.id}\``, inline: true }
-        )
-        .setTimestamp();
-    
-    await sendLog(sticker.guild, EMOJI_STICKER_LOG_ID, embed);
-});
-
-// ============================================
-// SERVER UPDATE LOG
+// SERVER UPDATE
 // ============================================
 client.on('guildUpdate', async (oldGuild, newGuild) => {
     if (oldGuild.id !== GUILD_ID) return;
     
     const changes = [];
-    
-    if (oldGuild.name !== newGuild.name) {
-        changes.push(`**Server Name:** ${oldGuild.name} → ${newGuild.name}`);
-    }
-    
-    if (oldGuild.icon !== newGuild.icon) {
-        changes.push(`**Server Icon:** Changed`);
-    }
-    
-    if (oldGuild.description !== newGuild.description) {
-        changes.push(`**Description:** ${oldGuild.description || "None"} → ${newGuild.description || "None"}`);
-    }
-    
-    if (oldGuild.verificationLevel !== newGuild.verificationLevel) {
-        changes.push(`**Verification Level:** ${oldGuild.verificationLevel} → ${newGuild.verificationLevel}`);
-    }
+    if (oldGuild.name !== newGuild.name) changes.push(`**Server Name:** ${oldGuild.name} → ${newGuild.name}`);
+    if (oldGuild.icon !== newGuild.icon) changes.push(`**Server Icon:** Changed`);
+    if (oldGuild.description !== newGuild.description) changes.push(`**Description:** ${oldGuild.description || "None"} → ${newGuild.description || "None"}`);
     
     if (changes.length === 0) return;
     
     const embed = new EmbedBuilder()
-        .setTitle("🏠 SERVER UPDATED")
-        .setDescription(`Server settings were modified`)
+        .setTitle("🏠 Server Updated")
         .setColor(0xF59E0B)
         .addFields({ name: "Changes", value: changes.join("\n"), inline: false })
         .setTimestamp();
     
-    await sendLog(oldGuild, SERVER_UPDATE_LOG_ID, embed);
+    await sendLog(oldGuild, embed);
 });
 
 // ============================================
@@ -697,48 +534,26 @@ client.on('guildUpdate', async (oldGuild, newGuild) => {
 // ============================================
 client.once('ready', async () => {
     console.log(`✨ ${client.user.tag} is online!`);
-    console.log(`📋 Professional Logs Bot - Version 2.0`);
+    console.log(`📋 Simple Logs Bot - Single Channel Mode`);
     console.log(`📊 Monitoring server ID: ${GUILD_ID}`);
     
-    // Verify bot has required permissions
     const guild = client.guilds.cache.get(GUILD_ID);
     if (guild) {
+        const logChannel = guild.channels.cache.get(LOG_CHANNEL_ID);
+        if (logChannel) {
+            console.log(`✅ Log channel: #${logChannel.name}`);
+        } else {
+            console.log(`⚠️ Log channel not found! Check LOG_CHANNEL_ID`);
+        }
+        
         const botMember = guild.members.cache.get(client.user.id);
-        if (botMember) {
-            const permissions = botMember.permissions.toArray();
-            console.log(`\n✅ Bot permissions: ${permissions.length} permissions granted`);
-            if (!permissions.includes('ViewAuditLog')) {
-                console.warn("⚠️ WARNING: Bot missing 'View Audit Log' permission! Some logs may not work.");
-            }
-            if (!permissions.includes('ManageMessages')) {
-                console.warn("⚠️ WARNING: Bot missing 'Manage Messages' permission!");
-            }
+        if (botMember && !botMember.permissions.has('ViewAuditLog')) {
+            console.log("⚠️ WARNING: Bot missing 'View Audit Log' permission!");
         }
     }
     
-    console.log("\n📁 Log channels configured:");
-    const channels = {
-        "Member Join": MEMBER_JOIN_LOG_ID,
-        "Member Leave": MEMBER_LEAVE_LOG_ID,
-        "Message Delete": MESSAGE_DELETE_LOG_ID,
-        "Message Edit": MESSAGE_EDIT_LOG_ID,
-        "Role Update": ROLE_UPDATE_LOG_ID,
-        "Channel": CHANNEL_LOG_ID,
-        "Voice": VOICE_LOG_ID,
-        "Ban": BAN_LOG_ID,
-        "Timeout": TIMEOUT_LOG_ID,
-        "Nickname": NICKNAME_LOG_ID,
-        "Invite": INVITE_LOG_ID,
-        "Emoji/Sticker": EMOJI_STICKER_LOG_ID,
-        "Server Update": SERVER_UPDATE_LOG_ID
-    };
-    
-    for (const [name, id] of Object.entries(channels)) {
-        if (id) console.log(`  ✓ ${name} Logs`);
-        else console.log(`  ✗ ${name} Logs (not configured)`);
-    }
-    
-    console.log("\n🚀 Bot is ready and logging!");
+    console.log(`\n📝 Logging all events to single channel`);
+    console.log(`🚀 Bot is ready!`);
 });
 
 // ============================================
