@@ -447,8 +447,8 @@ let invitesCache = new Map();
 client.once('ready', async () => {
     const guild = client.guilds.cache.get(GUILD_ID);
     if (guild) {
-        const invites = await guild.invites.fetch();
-        invitesCache.set(guild.id, invites);
+        const invites = await guild.invites.fetch().catch(() => null);
+        if (invites) invitesCache.set(guild.id, invites);
     }
 });
 
@@ -470,9 +470,8 @@ client.on('inviteCreate', async (invite) => {
     
     await sendLog(invite.guild, INVITE_LOG_ID, embed);
     
-    // Update cache
-    const invites = await invite.guild.invites.fetch();
-    invitesCache.set(invite.guild.id, invites);
+    const invites = await invite.guild.invites.fetch().catch(() => null);
+    if (invites) invitesCache.set(invite.guild.id, invites);
 });
 
 client.on('inviteDelete', async (invite) => {
@@ -490,7 +489,6 @@ client.on('inviteDelete', async (invite) => {
     
     await sendLog(invite.guild, INVITE_LOG_ID, embed);
     
-    // Update cache
     const invites = await invite.guild.invites.fetch().catch(() => null);
     if (invites) invitesCache.set(invite.guild.id, invites);
 });
@@ -638,14 +636,14 @@ client.once('ready', async () => {
 });
 
 // ============================================
-// ERROR HANDLING
+// ERROR HANDLING (FIXED)
 // ============================================
 process.on('unhandledRejection', (error) => {
-    console.error('Unhandled rejection:', error.message);
+    console.error('Unhandled rejection:', error);
 });
 
-process.on('uncaughtException', (error) {
-    console.error('Uncaught exception:', error.message);
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
 });
 
 // ============================================
